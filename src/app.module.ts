@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { RolesModule } from './roles/roles.module';
 import { ReservationsModule } from './reservations/reservations.module';
 import { PosModule } from './pos/pos.module';
 import { MenuModule } from './menu/menu.module';
@@ -23,6 +24,7 @@ import { PrismaModule } from './prisma/prisma.module';
     SentryModule.forRoot(),
     AuthModule,
     UsersModule,
+    RolesModule,
     ReservationsModule,
     PosModule,
     MenuModule,

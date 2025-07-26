@@ -1,28 +1,29 @@
-import { IsBoolean, IsNotEmpty,IsOptional,IsUUID,MinLength, IsEmail } from "class-validator";
-import { ApiProperty } from "@nestjs/swagger";
+// src/users/dto/user.dto.ts
+import { ApiProperty } from '@nestjs/swagger';
+import { IsEmail, IsNotEmpty, IsUUID, IsBoolean, MinLength, IsOptional } from 'class-validator';
 
-export class CreateUserDto{
-    @ApiProperty({ example: 'John Doe' })
-    @IsNotEmpty()
-    fullName: string;
+export class CreateUserDto {
+  @ApiProperty({ example: 'John Doe' })
+  @IsNotEmpty()
+  fullName: string;
 
-    @ApiProperty({ example: 'johndoe@example.com'})
-    @IsNotEmpty()
-    email: string;
+  @ApiProperty({ example: 'john@hotel.com' })
+  @IsEmail()
+  email: string;
 
-    @ApiProperty({ example: 'password123' })
-    @IsNotEmpty()
-    @MinLength(6)
-    password: string;
+  @ApiProperty({ example: 'password123' })
+  @IsNotEmpty()
+  @MinLength(6)
+  password: string;
 
-    @ApiProperty({example: 'uuid-role-id'})
-    @IsUUID()
-    roleId: string;
+  @ApiProperty({ example: 'uuid-role-id' })
+  @IsUUID()
+  roleId: string;
 
-    @ApiProperty({example: true, required: false})
-    @IsOptional()
-    @IsBoolean()
-    isActive?: boolean;
+  @ApiProperty({ example: true, required: false })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }
 
 export class UpdateUserDto {
@@ -44,6 +45,12 @@ export class UpdateUserDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+}
+
+export class AssignRoleDto {
+  @ApiProperty({ example: 'uuid-role-id' })
+  @IsUUID()
+  roleId: string;
 }
 
 export class UserResponseDto {

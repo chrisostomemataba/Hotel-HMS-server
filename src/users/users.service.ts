@@ -3,7 +3,12 @@ import { Injectable, ConflictException, NotFoundException } from '@nestjs/common
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
 import * as Sentry from '@sentry/nestjs';
-import { CreateUserDto, UpdateUserDto, UserResponseDto } from './user.dto';
+import { CreateUserDto, UpdateUserDto, UserResponseDto, AssignRoleDto } from './user.dto';
+import { User, Role } from '@prisma/client';
+
+type UserWithRole = User & {
+  role: Role;
+};
 
 @Injectable()
 export class UsersService {
@@ -17,6 +22,14 @@ export class UsersService {
 
       if (existingUser) {
         throw new ConflictException('Email already exists');
+      }
+
+      const roleExists = await this.prisma.role.findUnique({
+        where: { id: createUserDto.roleId },
+      });
+
+      if (!roleExists) {
+        throw new NotFoundException('Role not found');
       }
 
       const hashedPassword = await bcrypt.hash(createUserDto.password, 12);
@@ -34,22 +47,13 @@ export class UsersService {
         },
       });
 
-      return {
-        id: user.id,
-        fullName: user.fullName,
-        email: user.email,
-        isActive: user.isActive,
-        role: {
-          id: user.role.id,
-          name: user.role.name,
-          description: user.role.description ?? '',
-        },
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-      };
+      return this.mapToUserResponse(user as UserWithRole);
     } catch (error) {
-      Sentry.captureException(error);
-      if (error instanceof ConflictException) {
+      Sentry.captureException(error, {
+        tags: { action: 'create_user' },
+        extra: { email: createUserDto.email, roleId: createUserDto.roleId },
+      });
+      if (error instanceof ConflictException || error instanceof NotFoundException) {
         throw error;
       }
       throw new ConflictException('Failed to create user');
@@ -67,21 +71,11 @@ export class UsersService {
         },
       });
 
-      return users.map(user => ({
-        id: user.id,
-        fullName: user.fullName,
-        email: user.email,
-        isActive: user.isActive,
-        role: {
-          id: user.role.id,
-          name: user.role.name,
-          description: user.role.description ?? '',
-        },
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-      }));
+      return users.map(user => this.mapToUserResponse(user as UserWithRole));
     } catch (error) {
-      Sentry.captureException(error);
+      Sentry.captureException(error, {
+        tags: { action: 'find_all_users' },
+      });
       throw new NotFoundException('Failed to fetch users');
     }
   }
@@ -99,21 +93,12 @@ export class UsersService {
         throw new NotFoundException('User not found');
       }
 
-      return {
-        id: user.id,
-        fullName: user.fullName,
-        email: user.email,
-        isActive: user.isActive,
-        role: {
-          id: user.role.id,
-          name: user.role.name,
-          description: user.role.description ?? '',
-        },
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-      };
+      return this.mapToUserResponse(user as UserWithRole);
     } catch (error) {
-      Sentry.captureException(error);
+      Sentry.captureException(error, {
+        tags: { action: 'find_one_user' },
+        extra: { userId: id },
+      });
       if (error instanceof NotFoundException) {
         throw error;
       }
@@ -136,6 +121,16 @@ export class UsersService {
         }
       }
 
+      if (updateUserDto.roleId) {
+        const roleExists = await this.prisma.role.findUnique({
+          where: { id: updateUserDto.roleId },
+        });
+
+        if (!roleExists) {
+          throw new NotFoundException('Role not found');
+        }
+      }
+
       const user = await this.prisma.user.update({
         where: { id },
         data: updateUserDto,
@@ -144,25 +139,88 @@ export class UsersService {
         },
       });
 
-      return {
-        id: user.id,
-        fullName: user.fullName,
-        email: user.email,
-        isActive: user.isActive,
-        role: {
-          id: user.role.id,
-          name: user.role.name,
-          description: user.role.description ?? '',
-        },
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-      };
+      return this.mapToUserResponse(user as UserWithRole);
     } catch (error) {
-      Sentry.captureException(error);
-      if (error instanceof ConflictException) {
+      Sentry.captureException(error, {
+        tags: { action: 'update_user' },
+        extra: { userId: id, roleId: updateUserDto.roleId },
+      });
+      if (error instanceof ConflictException || error instanceof NotFoundException) {
         throw error;
       }
       throw new NotFoundException('Failed to update user');
+    }
+  }
+
+  async assignRole(userId: string, assignRoleDto: AssignRoleDto): Promise<UserResponseDto> {
+    try {
+      const userExists = await this.prisma.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!userExists) {
+        throw new NotFoundException('User not found');
+      }
+
+      const roleExists = await this.prisma.role.findUnique({
+        where: { id: assignRoleDto.roleId },
+      });
+
+      if (!roleExists) {
+        throw new NotFoundException('Role not found');
+      }
+
+      const user = await this.prisma.user.update({
+        where: { id: userId },
+        data: { roleId: assignRoleDto.roleId },
+        include: {
+          role: true,
+        },
+      });
+
+      return this.mapToUserResponse(user as UserWithRole);
+    } catch (error) {
+      Sentry.captureException(error, {
+        tags: { action: 'assign_role' },
+        extra: { userId, roleId: assignRoleDto.roleId },
+      });
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new NotFoundException('Failed to assign role');
+    }
+  }
+
+  async getUsersByRole(roleId: string): Promise<UserResponseDto[]> {
+    try {
+      const roleExists = await this.prisma.role.findUnique({
+        where: { id: roleId },
+      });
+
+      if (!roleExists) {
+        throw new NotFoundException('Role not found');
+      }
+
+      const users = await this.prisma.user.findMany({
+        where: { roleId },
+        include: {
+          role: true,
+        },
+        orderBy: {
+          fullName: 'asc',
+        },
+      });
+
+      return users.map(user => this.mapToUserResponse(user as UserWithRole));
+    } catch (error) {
+      Sentry.captureException(error, {
+        tags: { action: 'get_users_by_role' },
+        extra: { roleId },
+      });
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new NotFoundException('Failed to fetch users by role');
     }
   }
 
@@ -172,8 +230,27 @@ export class UsersService {
         where: { id },
       });
     } catch (error) {
-      Sentry.captureException(error);
+      Sentry.captureException(error, {
+        tags: { action: 'delete_user' },
+        extra: { userId: id },
+      });
       throw new NotFoundException('User not found');
     }
+  }
+
+  private mapToUserResponse(user: UserWithRole): UserResponseDto {
+    return {
+      id: user.id,
+      fullName: user.fullName,
+      email: user.email,
+      isActive: user.isActive,
+      role: {
+        id: user.role.id,
+        name: user.role.name,
+        description: user.role.description ?? '',
+      },
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
   }
 }
