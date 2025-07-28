@@ -15,6 +15,7 @@ import { StaffModule } from './staff/staff.module';
 import { FinanceModule } from './finance/finance.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { RoomsModule } from './rooms/rooms.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { PrismaModule } from './prisma/prisma.module';
     FinanceModule,
     DashboardModule,
     PrismaModule,
+    RoomsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
